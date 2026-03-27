@@ -1,0 +1,88 @@
+@Service
+public class ReportApplicationService {
+
+    private final WordRenderService wordRenderService;
+
+    public ReportApplicationService(WordRenderService wordRenderService) {
+        this.wordRenderService = wordRenderService;
+    }
+
+    public byte[] renderDifyMarkdown(String markdown) {
+        return wordRenderService.renderDocx(markdown, WordRenderOptions.builder()
+            .contentType(WordRenderContentType.MARKDOWN)
+            .reportStyle(WordRenderReportStyle.FORMAL)
+            .title("Dify 报告")
+            .subTitle("自动生成的业务分析")
+            .headerText("Dify Workflow")
+            .headerPosition(WordRenderPosition.RIGHT)
+            .footerText("内部资料")
+            .showPageNumber(true)
+            .watermarkText("内部资料")
+            .watermarkColor("#BFBFBF")
+            .watermarkFontSize(22)
+            .author("workflow-engine")
+            .metadata("reportNo", "WR-20260320")
+            .build());
+    }
+
+    public byte[] renderPlainText(String plainText) {
+        return wordRenderService.renderDocx(plainText, WordRenderOptions.builder()
+            .contentType(WordRenderContentType.PLAIN_TEXT)
+            .reportStyle(WordRenderReportStyle.DEFAULT)
+            .title("普通文本报告")
+            .footerText("运营中心")
+            .showPageNumber(true)
+            .author("workflow-engine")
+            .build());
+    }
+
+    public void renderMarkdownToFile(String markdown, Path outputPath) {
+        wordRenderService.renderDocxToFile(markdown, WordRenderOptions.builder()
+            .contentType(WordRenderContentType.MARKDOWN)
+            .reportStyle(WordRenderReportStyle.FORMAL)
+            .title("导出报告")
+            .headerText("导出任务")
+            .headerPosition(WordRenderPosition.RIGHT)
+            .footerText("内部资料")
+            .showPageNumber(true)
+            .watermarkText("内部资料")
+            .watermarkColor("#BFBFBF")
+            .watermarkFontSize(22)
+            .build(), outputPath);
+    }
+
+    public void streamMarkdownToHttpResponse(String markdown, OutputStream outputStream) {
+        wordRenderService.renderDocxToStream(markdown, WordRenderOptions.builder()
+            .contentType(WordRenderContentType.MARKDOWN)
+            .reportStyle(WordRenderReportStyle.FORMAL)
+            .title("流式导出报告")
+            .footerText("内部资料")
+            .showPageNumber(true)
+            .watermarkText("内部资料")
+            .watermarkColor("#BFBFBF")
+            .watermarkFontSize(22)
+            .build(), outputStream);
+    }
+
+    public byte[] renderDifyMarkdownIntoTemplate(String summary, String markdown) {
+        return wordRenderService.renderDocx("", WordRenderOptions.builder()
+            .templateResource("classpath:/templates/fixed-sections-template.docx")
+            .templateMode(WordRenderTemplateMode.PLACEHOLDER)
+            .templateBinding("wr_summary", WordRenderTemplateBinding.builder()
+                .content(summary)
+                .contentType(WordRenderContentType.PLAIN_TEXT)
+                .build())
+            .templateBinding("wr_content", WordRenderTemplateBinding.builder()
+                .content(markdown)
+                .contentType(WordRenderContentType.MARKDOWN)
+                .baseHeadingLevel(3)
+                .build())
+            .footerText("内部资料")
+            .showPageNumber(true)
+            .watermarkText("内部资料")
+            .watermarkColor("#BFBFBF")
+            .watermarkFontSize(22)
+            .author("workflow-engine")
+            .build());
+    }
+}

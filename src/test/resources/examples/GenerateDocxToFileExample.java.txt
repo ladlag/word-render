@@ -1,0 +1,118 @@
+Path output = Paths.get("/tmp/word-render/weekly-report.docx");
+
+wordRenderService.renderDocxToFile(
+    "# 周报总览\n\n## 核心结论\n\n- 本周新增客户 28 家\n- 转化率提升到 **18.7%**",
+    WordRenderOptions.builder()
+        .contentType(WordRenderContentType.MARKDOWN)
+        .reportStyle(WordRenderReportStyle.FORMAL)
+        .title("周报总览")
+        .subTitle("自动生成文件示例")
+        .headerText("销售周报")
+        .headerPosition(WordRenderPosition.RIGHT)
+        .footerText("销售中心")
+        .showPageNumber(true)
+        .headingColor("#1F1F1F")
+        .watermarkText("内部资料")
+        .watermarkColor("#BFBFBF")
+        .watermarkFontSize(22)
+        .author("dify-workflow")
+        .metadata("department", "销售中心")
+        .metadata("reportNo", "WR-20260320-01")
+        .build(),
+    output
+);
+
+Path plainTextOutput = Paths.get("/tmp/word-render/plain-report.docx");
+
+wordRenderService.renderDocxToFile(
+    "这是一个普通文本报告。\n\n第一段用于描述背景。\n第二段用于描述结论。",
+    WordRenderOptions.builder()
+        .contentType(WordRenderContentType.PLAIN_TEXT)
+        .reportStyle(WordRenderReportStyle.DEFAULT)
+        .title("普通文本报告")
+        .author("report-job")
+        .build(),
+    plainTextOutput
+);
+
+byte[] markdownBytes = wordRenderService.renderDocx(
+    "# 经营分析报告\n\n## 核心结论\n\n- 本周新增客户 **28 家**\n- 商机转化率提升到 `18.7%`\n\n| 指标 | 本周 | 上周 | 环比 |\n| --- | --- | --- | --- |\n| 线索数 | 320 | 275 | +16.4% |\n| 成交数 | 28 | 21 | +33.3% |",
+    WordRenderOptions.builder()
+        .contentType(WordRenderContentType.MARKDOWN)
+        .reportStyle(WordRenderReportStyle.FORMAL)
+        .title("经营分析报告")
+        .subTitle("Markdown 直出 byte[] 示例")
+        .headerText("经营分析")
+        .headerPosition(WordRenderPosition.RIGHT)
+        .footerText("仅供内部使用")
+        .showPageNumber(true)
+        .watermarkText("内部资料")
+        .author("dify-workflow")
+        .metadata("reportNo", "WR-20260327-01")
+        .build()
+);
+
+try (OutputStream outputStream = Files.newOutputStream(Paths.get("/tmp/word-render/stream-report.docx"))) {
+    wordRenderService.renderDocxToStream(
+        "# 流式输出报告\n\n## 结论\n\n- 适合几十页文档\n- 更适合生产并发导出",
+        WordRenderOptions.builder()
+            .contentType(WordRenderContentType.MARKDOWN)
+            .reportStyle(WordRenderReportStyle.FORMAL)
+            .title("流式输出报告")
+            .footerText("内部资料")
+            .showPageNumber(true)
+            .watermarkText("内部资料")
+            .watermarkColor("#BFBFBF")
+            .watermarkFontSize(22)
+            .build(),
+        outputStream
+    );
+}
+
+byte[] templateBasedDocx = wordRenderService.renderDocx(
+    "# 个性化分析\n\n这里开始是模板后的动态正文。",
+    WordRenderOptions.builder()
+        .contentType(WordRenderContentType.MARKDOWN)
+        .templateResource("classpath:/templates/fixed-report-template.docx")
+        .appendPageBreakAfterTemplate(true)
+        .headerText("经营分析")
+        .headerPosition(WordRenderPosition.RIGHT)
+        .footerText("仅供内部使用")
+        .showPageNumber(true)
+        .watermarkText("内部资料")
+        .watermarkColor("#BFBFBF")
+        .watermarkFontSize(22)
+        .build()
+);
+
+byte[] placeholderTemplateDocx = wordRenderService.renderDocx(
+    "",
+    WordRenderOptions.builder()
+        .templateResource("classpath:/templates/fixed-sections-template.docx")
+        .templateMode(WordRenderTemplateMode.PLACEHOLDER)
+        .templateBinding("wr_summary", WordRenderTemplateBinding.builder()
+            .content("这是自动生成的摘要。")
+            .contentType(WordRenderContentType.PLAIN_TEXT)
+            .build())
+        .templateBinding("wr_content", WordRenderTemplateBinding.builder()
+            .content("# 动态正文\n\n## 会被下沉为四级标题\n\n- 列表项一\n- 列表项二")
+            .contentType(WordRenderContentType.MARKDOWN)
+            .baseHeadingLevel(3)
+            .build())
+        .templateBinding("wr_appendix", WordRenderTemplateBinding.builder()
+            .content("附录说明")
+            .contentType(WordRenderContentType.PLAIN_TEXT)
+            .build())
+        .build()
+);
+
+WordRenderOptions watermarkOnlyOptions = WordRenderOptions.builder()
+    .contentType(WordRenderContentType.MARKDOWN)
+    .title("带水印报告")
+    .titleColor("#1F1F1F")
+    .headingColor("#1F1F1F")
+    .accentColor("#7F7F7F")
+    .watermarkText("内部资料")
+    .watermarkColor("#BFBFBF")
+    .watermarkFontSize(22)
+    .build();

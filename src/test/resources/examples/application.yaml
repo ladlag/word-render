@@ -1,0 +1,23 @@
+word-render:
+  enabled: true
+  default-style: FORMAL
+  default-font-family: Microsoft YaHei
+  default-font-size: 11
+  page-size: A4
+  fonts:
+    regular-path: classpath:/fonts/HarmonyOS_SansSC_Regular.ttf
+    bold-path: classpath:/fonts/HarmonyOS_SansSC_Bold.ttf
+    default-family: Microsoft YaHei, PingFang SC, Noto Sans SC, SimSun, Arial Unicode MS, sans-serif
+  colors:
+    title-color: "1F1F1F"
+    heading-color: "1F1F1F"
+    accent-color: "7F7F7F"
+  watermark:
+    enabled: true
+    text: "内部资料"
+    color: "BFBFBF"
+    font-size: 22
+  cache:
+    enabled: true
+    type: MEMORY
+    redis-key-prefix: "word-render:"
