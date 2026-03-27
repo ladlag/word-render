@@ -275,6 +275,9 @@ byte[] bytes = wordRenderService.renderDocx(
 
 适用于前几页固定、中间几页动态、后几页固定附录或声明页。
 
+占位符不是只支持 `${wr_summary}`、`${wr_content}`、`${wr_appendix}` 这 3 个名字。
+这 3 个只是示例命名，实际支持任意占位名，只要模板里和 `templateBinding(...)` 里保持一致即可。
+
 模板中的占位段落示例：
 
 ```text
@@ -309,6 +312,57 @@ byte[] bytes = wordRenderService.renderDocx(
         .build()
 );
 ```
+
+### 5.1 多动态内容块模板示例
+
+适用于这种结构：
+
+- 固定 1-N 页
+- 动态内容块 A
+- 固定 M+5 页
+- 动态内容块 B
+- 固定尾页（可选）
+
+模板示例：
+
+```text
+固定封面页
+固定目录页
+${wr_section_a}
+固定中间说明页
+${wr_section_b}
+固定附录页
+```
+
+调用示例：
+
+```java
+byte[] bytes = wordRenderService.renderDocx(
+    "",
+    WordRenderOptions.builder()
+        .templateResource("classpath:/templates/multi-dynamic-sections.docx")
+        .templateMode(WordRenderTemplateMode.PLACEHOLDER)
+        .templateBinding("wr_section_a", WordRenderTemplateBinding.builder()
+            .content("# 第一部分标题\n\n## 第一部分小节\n\n- 动态内容 A1\n- 动态内容 A2")
+            .contentType(WordRenderContentType.MARKDOWN)
+            .baseHeadingLevel(3)
+            .build())
+        .templateBinding("wr_section_b", WordRenderTemplateBinding.builder()
+            .content("第二部分是普通文本内容，用于插入固定说明页之后的动态区域。")
+            .contentType(WordRenderContentType.PLAIN_TEXT)
+            .build())
+        .footerText("内部资料")
+        .showPageNumber(true)
+        .build()
+);
+```
+
+这个模式下：
+
+- 模板里的固定页内容会原样保留
+- `${wr_section_a}` 会替换成第一段动态内容
+- `${wr_section_b}` 会替换成第二段动态内容
+- 固定尾页如果存在，也会继续保留
 
 ### 6. 标题偏移示例
 
