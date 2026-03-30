@@ -182,7 +182,7 @@ public class WordRenderMarkdownRenderer implements WordRenderContentRenderer {
         shd.setColor("auto");
         shd.setFill("F4F4F4");
         XWPFRun run = paragraph.createRun();
-        run.setFontFamily("Courier New");
+        WordRenderPoiSupport.applyFontFamily(run, "Courier New");
         run.setFontSize(context.styleDefinition.getBodyFontSize());
         run.setText(codeBlock.getContentChars().normalizeEOL().toString());
     }

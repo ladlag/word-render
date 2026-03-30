@@ -16,7 +16,10 @@ import org.apache.poi.xwpf.usermodel.XWPFTableRow;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTAbstractNum;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTLvl;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTP;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTR;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTFonts;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTShd;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGrid;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGridCol;
@@ -45,7 +48,7 @@ public final class WordRenderPoiSupport {
 
     public static XWPFRun createRun(XWPFParagraph paragraph, String fontFamily, int fontSize, String color, boolean bold) {
         XWPFRun run = paragraph.createRun();
-        run.setFontFamily(fontFamily);
+        applyFontFamily(run, fontFamily);
         run.setFontSize(fontSize);
         if (color != null) {
             run.setColor(color);
@@ -57,7 +60,7 @@ public final class WordRenderPoiSupport {
     public static void appendText(XWPFParagraph paragraph, String text, String fontFamily, int fontSize,
                                   boolean bold, boolean italic, String color) {
         XWPFRun run = paragraph.createRun();
-        run.setFontFamily(fontFamily);
+        applyFontFamily(run, fontFamily);
         run.setFontSize(fontSize);
         run.setBold(bold);
         run.setItalic(italic);
@@ -69,7 +72,7 @@ public final class WordRenderPoiSupport {
 
     public static void appendCode(XWPFParagraph paragraph, String text, String fontFamily, int fontSize) {
         XWPFRun run = paragraph.createRun();
-        run.setFontFamily(fontFamily);
+        applyFontFamily(run, fontFamily);
         run.setFontSize(fontSize);
         run.setText(text);
         run.setColor("C00000");
@@ -87,8 +90,39 @@ public final class WordRenderPoiSupport {
         XWPFHyperlinkRun run = new XWPFHyperlinkRun(hyperlink, ctr, paragraph);
         run.setUnderline(UnderlinePatterns.SINGLE);
         run.setColor("0563C1");
-        run.setFontFamily(fontFamily);
+        applyFontFamily(run, fontFamily);
         run.setFontSize(fontSize);
+    }
+
+    public static void applyFontFamily(XWPFRun run, String fontFamily) {
+        if (run == null || fontFamily == null || fontFamily.trim().isEmpty()) {
+            return;
+        }
+        String normalized = fontFamily.trim();
+        run.setFontFamily(normalized);
+        CTRPr runProperties = run.getCTR().isSetRPr() ? run.getCTR().getRPr() : run.getCTR().addNewRPr();
+        CTFonts fonts = runProperties.sizeOfRFontsArray() > 0 ? runProperties.getRFontsArray(0) : runProperties.addNewRFonts();
+        fonts.setAscii(normalized);
+        fonts.setHAnsi(normalized);
+        fonts.setEastAsia(normalized);
+        fonts.setCs(normalized);
+    }
+
+    public static void copyParagraphFormatting(XWPFParagraph source, XWPFParagraph target) {
+        if (source == null || target == null) {
+            return;
+        }
+        if (source.getCTP().isSetPPr()) {
+            target.getCTP().setPPr((CTPPr) source.getCTP().getPPr().copy());
+        }
+        XWPFRun sourceRun = source.getRuns().isEmpty() ? null : source.getRuns().get(0);
+        if (sourceRun != null) {
+            XWPFRun targetRun = target.createRun();
+            if (sourceRun.getCTR().isSetRPr()) {
+                targetRun.getCTR().setRPr((CTRPr) sourceRun.getCTR().getRPr().copy());
+            }
+            target.removeRun(0);
+        }
     }
 
     public static BigInteger ensureNumbering(XWPFDocument document, boolean ordered) {

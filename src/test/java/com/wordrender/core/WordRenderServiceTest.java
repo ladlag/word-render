@@ -23,6 +23,7 @@ import java.util.zip.ZipInputStream;
 
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.BreakType;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -655,6 +656,43 @@ class WordRenderServiceTest {
                 .anyMatch(table -> table.getText().contains("华东") && table.getText().contains("高")
                     && table.getText().contains("建议优先跟进"))).isTrue();
             document.close();
+        });
+    }
+
+    @Test
+    void shouldPreserveTemplatePageBreakBeforePlaceholderContent() {
+        contextRunner.run(context -> {
+            WordRenderService service = context.getBean(WordRenderService.class);
+            Path fixtureDir = fixtureDir();
+            Path templatePath = fixtureDir.resolve("placeholder-page-break.docx");
+
+            try (XWPFDocument templateDocument = new XWPFDocument();
+                 OutputStream outputStream = Files.newOutputStream(templatePath)) {
+                templateDocument.createParagraph().createRun().setText("固定首页");
+                XWPFParagraph contentParagraph = templateDocument.createParagraph();
+                contentParagraph.createRun().addBreak(BreakType.PAGE);
+                contentParagraph.createRun().setText("${wr_content}");
+                templateDocument.write(outputStream);
+            }
+
+            byte[] bytes = service.renderDocx(
+                "",
+                WordRenderOptions.builder()
+                    .templateResource(templatePath.toUri().toString())
+                    .templateMode(WordRenderTemplateMode.PLACEHOLDER)
+                    .templateBinding("wr_content", WordRenderTemplateBinding.builder()
+                        .content("# 动态内容标题\n\n正文内容")
+                        .contentType(WordRenderContentType.MARKDOWN)
+                        .build())
+                    .build()
+            );
+
+            String documentXml = readZipEntry(bytes, "word/document.xml");
+            assertThat(documentXml).contains("w:type=\"page\"");
+            try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(bytes))) {
+                assertThat(document.getParagraphs().stream().anyMatch(p -> p.getText().contains("固定首页"))).isTrue();
+                assertThat(document.getParagraphs().stream().anyMatch(p -> p.getText().contains("动态内容标题"))).isTrue();
+            }
         });
     }
 

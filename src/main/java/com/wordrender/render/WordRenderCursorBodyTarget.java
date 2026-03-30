@@ -11,11 +11,17 @@ import org.apache.xmlbeans.XmlCursor;
 public class WordRenderCursorBodyTarget implements WordRenderBodyTarget {
 
     private final IBody body;
+    private final XWPFParagraph templateParagraph;
     private XmlCursor cursor;
 
     public WordRenderCursorBodyTarget(IBody body, XmlCursor cursor) {
+        this(body, cursor, null);
+    }
+
+    public WordRenderCursorBodyTarget(IBody body, XmlCursor cursor, XWPFParagraph templateParagraph) {
         this.body = body;
         this.cursor = cursor;
+        this.templateParagraph = templateParagraph;
     }
 
     @Override
@@ -26,6 +32,7 @@ public class WordRenderCursorBodyTarget implements WordRenderBodyTarget {
     @Override
     public XWPFParagraph createParagraph(ParagraphAlignment alignment, int spacingAfter) {
         XWPFParagraph paragraph = body.insertNewParagraph(cursor);
+        WordRenderPoiSupport.copyParagraphFormatting(templateParagraph, paragraph);
         paragraph.setAlignment(alignment);
         paragraph.setSpacingAfter(spacingAfter);
         advanceCursor(paragraph.getCTP().newCursor());

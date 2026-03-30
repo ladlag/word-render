@@ -16,10 +16,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.poi.xwpf.usermodel.IBody;
 import org.apache.poi.xwpf.usermodel.IBodyElement;
+import org.apache.poi.xwpf.usermodel.BreakType;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFFooter;
 import org.apache.poi.xwpf.usermodel.XWPFHeader;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.apache.poi.xwpf.usermodel.XWPFTableRow;
@@ -95,7 +97,11 @@ public class WordRenderTemplatePlaceholderProcessor {
             WordRenderTemplateBinding binding = bindings.get(standaloneKey);
             matched.add(standaloneKey);
             try (XmlCursor cursor = paragraph.getCTP().newCursor()) {
-                WordRenderBodyTarget target = new WordRenderCursorBodyTarget(body, cursor);
+                WordRenderBodyTarget target = new WordRenderCursorBodyTarget(body, cursor, paragraph);
+                if (containsPageBreak(paragraph)) {
+                    target.createParagraph(org.apache.poi.xwpf.usermodel.ParagraphAlignment.LEFT, 0)
+                        .createRun().addBreak(BreakType.PAGE);
+                }
                 if (StringUtils.hasText(binding.getContent())) {
                     resolveRenderer(binding.getContentType()).render(target, binding.getContent(), styleDefinition,
                         binding.getBaseHeadingLevel());
@@ -133,11 +139,28 @@ public class WordRenderTemplatePlaceholderProcessor {
     }
 
     private void replaceParagraphText(XWPFParagraph paragraph, String replacedText) {
-        int runCount = paragraph.getRuns().size();
-        for (int i = runCount - 1; i >= 0; i--) {
+        if (paragraph.getRuns().isEmpty()) {
+            paragraph.createRun().setText(replacedText == null ? "" : replacedText);
+            return;
+        }
+        paragraph.getRuns().get(0).setText(replacedText == null ? "" : replacedText, 0);
+        for (int i = paragraph.getRuns().size() - 1; i >= 1; i--) {
             paragraph.removeRun(i);
         }
-        paragraph.createRun().setText(replacedText == null ? "" : replacedText);
+    }
+
+    private boolean containsPageBreak(XWPFParagraph paragraph) {
+        for (XWPFRun run : paragraph.getRuns()) {
+            if (run.getCTR().sizeOfBrArray() > 0) {
+                for (int index = 0; index < run.getCTR().sizeOfBrArray(); index++) {
+                    if (run.getCTR().getBrArray(index).getType() == null
+                        || run.getCTR().getBrArray(index).getType() == org.openxmlformats.schemas.wordprocessingml.x2006.main.STBrType.PAGE) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private String extractStandalonePlaceholderKey(String paragraphText) {
