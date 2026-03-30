@@ -7,6 +7,7 @@ import com.wordrender.render.WordRenderContentRenderer;
 import com.wordrender.render.WordRenderCursorBodyTarget;
 import com.wordrender.style.WordRenderStyleDefinition;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +28,7 @@ import org.springframework.util.StringUtils;
 
 public class WordRenderTemplatePlaceholderProcessor {
 
-    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("^\\$\\{([A-Za-z0-9_.-]+)\\}$");
+    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{([A-Za-z0-9_.-]+)\\}");
 
     private final WordRenderContentRenderer markdownRenderer;
     private final WordRenderContentRenderer plainTextRenderer;
@@ -84,28 +85,79 @@ public class WordRenderTemplatePlaceholderProcessor {
 
     private void processParagraph(IBody body, XWPFParagraph paragraph, Map<String, WordRenderTemplateBinding> bindings,
                                   Set<String> matched, WordRenderStyleDefinition styleDefinition) {
-        String placeholderKey = extractPlaceholderKey(paragraph.getText());
-        if (placeholderKey == null || !bindings.containsKey(placeholderKey)) {
+        String paragraphText = paragraph.getText();
+        List<String> placeholderKeys = extractPlaceholderKeys(paragraphText);
+        if (placeholderKeys.isEmpty()) {
             return;
         }
-        WordRenderTemplateBinding binding = bindings.get(placeholderKey);
-        matched.add(placeholderKey);
-        try (XmlCursor cursor = paragraph.getCTP().newCursor()) {
-            WordRenderBodyTarget target = new WordRenderCursorBodyTarget(body, cursor);
-            if (StringUtils.hasText(binding.getContent())) {
-                resolveRenderer(binding.getContentType()).render(target, binding.getContent(), styleDefinition,
-                    binding.getBaseHeadingLevel());
+        String standaloneKey = extractStandalonePlaceholderKey(paragraphText);
+        if (standaloneKey != null && bindings.containsKey(standaloneKey)) {
+            WordRenderTemplateBinding binding = bindings.get(standaloneKey);
+            matched.add(standaloneKey);
+            try (XmlCursor cursor = paragraph.getCTP().newCursor()) {
+                WordRenderBodyTarget target = new WordRenderCursorBodyTarget(body, cursor);
+                if (StringUtils.hasText(binding.getContent())) {
+                    resolveRenderer(binding.getContentType()).render(target, binding.getContent(), styleDefinition,
+                        binding.getBaseHeadingLevel());
+                }
             }
+            removeParagraph(body, paragraph);
+            return;
         }
-        removeParagraph(body, paragraph);
+
+        boolean hasKnownPlaceholder = false;
+        String replacedText = paragraphText;
+        for (String placeholderKey : placeholderKeys) {
+            if (!bindings.containsKey(placeholderKey)) {
+                continue;
+            }
+            hasKnownPlaceholder = true;
+            matched.add(placeholderKey);
+            replacedText = replacedText.replace("${" + placeholderKey + "}",
+                resolveInlineReplacement(bindings.get(placeholderKey), placeholderKey));
+        }
+        if (!hasKnownPlaceholder) {
+            return;
+        }
+        replaceParagraphText(paragraph, replacedText);
     }
 
-    private String extractPlaceholderKey(String paragraphText) {
+    private String resolveInlineReplacement(WordRenderTemplateBinding binding, String placeholderKey) {
+        if (binding == null || !StringUtils.hasText(binding.getContent())) {
+            return "";
+        }
+        if (binding.getContentType() == WordRenderContentType.MARKDOWN) {
+            throw new WordRenderException("Inline placeholder does not support markdown content: " + placeholderKey);
+        }
+        return binding.getContent().replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ');
+    }
+
+    private void replaceParagraphText(XWPFParagraph paragraph, String replacedText) {
+        int runCount = paragraph.getRuns().size();
+        for (int i = runCount - 1; i >= 0; i--) {
+            paragraph.removeRun(i);
+        }
+        paragraph.createRun().setText(replacedText == null ? "" : replacedText);
+    }
+
+    private String extractStandalonePlaceholderKey(String paragraphText) {
         if (!StringUtils.hasText(paragraphText)) {
             return null;
         }
-        Matcher matcher = PLACEHOLDER_PATTERN.matcher(paragraphText.trim());
+        Matcher matcher = Pattern.compile("^\\s*\\$\\{([A-Za-z0-9_.-]+)\\}\\s*$").matcher(paragraphText);
         return matcher.matches() ? matcher.group(1) : null;
+    }
+
+    private List<String> extractPlaceholderKeys(String paragraphText) {
+        if (!StringUtils.hasText(paragraphText)) {
+            return Collections.emptyList();
+        }
+        List<String> keys = new ArrayList<String>();
+        Matcher matcher = PLACEHOLDER_PATTERN.matcher(paragraphText);
+        while (matcher.find()) {
+            keys.add(matcher.group(1));
+        }
+        return keys;
     }
 
     private WordRenderContentRenderer resolveRenderer(WordRenderContentType contentType) {

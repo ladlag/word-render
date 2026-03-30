@@ -22,6 +22,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -462,6 +463,42 @@ class WordRenderServiceTest {
             assertThat(document.getParagraphs().stream().anyMatch(p -> p.getText().contains("${wr_content}"))).isFalse();
             assertThat(document.getParagraphs().stream().anyMatch(p -> p.getText().contains("固定附录"))).isTrue();
             document.close();
+        });
+    }
+
+    @Test
+    void shouldReplaceInlinePlaceholderSplitAcrossRuns() {
+        contextRunner.run(context -> {
+            WordRenderService service = context.getBean(WordRenderService.class);
+            Path fixtureDir = fixtureDir();
+            Path templatePath = fixtureDir.resolve("placeholder-inline-runs.docx");
+
+            try (XWPFDocument templateDocument = new XWPFDocument();
+                 OutputStream outputStream = Files.newOutputStream(templatePath)) {
+                XWPFParagraph paragraph = templateDocument.createParagraph();
+                paragraph.createRun().setText("授信申请人：");
+                paragraph.createRun().setText("${");
+                paragraph.createRun().setText("wr");
+                paragraph.createRun().setText("_name}");
+                templateDocument.write(outputStream);
+            }
+
+            byte[] bytes = service.renderDocx(
+                "",
+                WordRenderOptions.builder()
+                    .templateResource(templatePath.toUri().toString())
+                    .templateMode(WordRenderTemplateMode.PLACEHOLDER)
+                    .templateBinding("wr_name", WordRenderTemplateBinding.builder()
+                        .content("北京某科技有限公司")
+                        .contentType(WordRenderContentType.PLAIN_TEXT)
+                        .build())
+                    .build()
+            );
+
+            try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(bytes))) {
+                assertThat(document.getParagraphs().stream()
+                    .anyMatch(p -> p.getText().contains("授信申请人：北京某科技有限公司"))).isTrue();
+            }
         });
     }
 
