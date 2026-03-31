@@ -99,7 +99,7 @@ public class WordRenderTemplatePlaceholderProcessor {
             matched.add(standaloneKey);
             WordRenderStyleDefinition effectiveStyle = resolveTemplateStyle(styleDefinition, paragraph);
             try (XmlCursor cursor = paragraph.getCTP().newCursor()) {
-                WordRenderBodyTarget target = new WordRenderCursorBodyTarget(body, cursor, paragraph);
+                WordRenderBodyTarget target = new WordRenderCursorBodyTarget(body, cursor);
                 if (containsPageBreak(paragraph)) {
                     target.createParagraph(org.apache.poi.xwpf.usermodel.ParagraphAlignment.LEFT, 0)
                         .createRun().addBreak(BreakType.PAGE);
