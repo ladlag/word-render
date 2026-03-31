@@ -125,6 +125,34 @@ public final class WordRenderPoiSupport {
         }
     }
 
+    public static String resolveParagraphFontFamily(XWPFParagraph paragraph) {
+        if (paragraph == null || paragraph.getRuns().isEmpty()) {
+            return null;
+        }
+        for (XWPFRun run : paragraph.getRuns()) {
+            if (run.getCTR().isSetRPr()) {
+                CTRPr runProperties = run.getCTR().getRPr();
+                if (runProperties.sizeOfRFontsArray() > 0) {
+                    CTFonts fonts = runProperties.getRFontsArray(0);
+                    if (fonts.isSetEastAsia() && fonts.getEastAsia() != null && !fonts.getEastAsia().trim().isEmpty()) {
+                        return fonts.getEastAsia().trim();
+                    }
+                    if (fonts.isSetAscii() && fonts.getAscii() != null && !fonts.getAscii().trim().isEmpty()) {
+                        return fonts.getAscii().trim();
+                    }
+                    if (fonts.isSetHAnsi() && fonts.getHAnsi() != null && !fonts.getHAnsi().trim().isEmpty()) {
+                        return fonts.getHAnsi().trim();
+                    }
+                }
+            }
+            String runFont = run.getFontFamily();
+            if (runFont != null && !runFont.trim().isEmpty()) {
+                return runFont.trim();
+            }
+        }
+        return null;
+    }
+
     public static BigInteger ensureNumbering(XWPFDocument document, boolean ordered) {
         XWPFNumbering numbering = document.createNumbering();
         CTAbstractNum abstractNum = CTAbstractNum.Factory.newInstance();

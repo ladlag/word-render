@@ -27,6 +27,7 @@ import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.apache.poi.xwpf.usermodel.XWPFTableRow;
 import org.apache.xmlbeans.XmlCursor;
 import org.springframework.util.StringUtils;
+import com.wordrender.support.WordRenderPoiSupport;
 
 public class WordRenderTemplatePlaceholderProcessor {
 
@@ -96,6 +97,7 @@ public class WordRenderTemplatePlaceholderProcessor {
         if (standaloneKey != null && bindings.containsKey(standaloneKey)) {
             WordRenderTemplateBinding binding = bindings.get(standaloneKey);
             matched.add(standaloneKey);
+            WordRenderStyleDefinition effectiveStyle = resolveTemplateStyle(styleDefinition, paragraph);
             try (XmlCursor cursor = paragraph.getCTP().newCursor()) {
                 WordRenderBodyTarget target = new WordRenderCursorBodyTarget(body, cursor, paragraph);
                 if (containsPageBreak(paragraph)) {
@@ -103,7 +105,7 @@ public class WordRenderTemplatePlaceholderProcessor {
                         .createRun().addBreak(BreakType.PAGE);
                 }
                 if (StringUtils.hasText(binding.getContent())) {
-                    resolveRenderer(binding.getContentType()).render(target, binding.getContent(), styleDefinition,
+                    resolveRenderer(binding.getContentType()).render(target, binding.getContent(), effectiveStyle,
                         binding.getBaseHeadingLevel());
                 }
             }
@@ -161,6 +163,14 @@ public class WordRenderTemplatePlaceholderProcessor {
             }
         }
         return false;
+    }
+
+    private WordRenderStyleDefinition resolveTemplateStyle(WordRenderStyleDefinition styleDefinition, XWPFParagraph paragraph) {
+        String paragraphFontFamily = WordRenderPoiSupport.resolveParagraphFontFamily(paragraph);
+        if (!StringUtils.hasText(paragraphFontFamily)) {
+            return styleDefinition;
+        }
+        return styleDefinition.withFontFamily(paragraphFontFamily);
     }
 
     private String extractStandalonePlaceholderKey(String paragraphText) {

@@ -85,6 +85,20 @@ public class WordRenderDocumentComposer {
         pageBreak.createRun().addBreak(BreakType.PAGE);
     }
 
+    public WordRenderStyleDefinition adaptStyleToTemplate(XWPFDocument document, WordRenderOptions options,
+                                                          WordRenderStyleDefinition styleDefinition) {
+        if (!hasTemplate(options)) {
+            return styleDefinition;
+        }
+        String templateFontFamily = resolveTemplateFontFamily(document);
+        if (!hasText(templateFontFamily)) {
+            return styleDefinition;
+        }
+        WordRenderStyleDefinition adapted = styleDefinition.withFontFamily(templateFontFamily);
+        configureStyles(document, adapted);
+        return adapted;
+    }
+
     private XWPFDocument createBaseDocument(WordRenderOptions options) {
         if (!hasTemplate(options)) {
             return new XWPFDocument();
@@ -137,21 +151,22 @@ public class WordRenderDocumentComposer {
         }
         ensureNormalStyle(styles, styleDefinition);
         ensureParagraphStyle(styles, "Heading1", "Heading 1", styleDefinition.getHeadingOneFontSize(),
-            styleDefinition.getHeadingColor(), 0);
+            styleDefinition.getHeadingColor(), 0, styleDefinition);
         ensureParagraphStyle(styles, "Heading2", "Heading 2", styleDefinition.getHeadingTwoFontSize(),
-            styleDefinition.getHeadingColor(), 1);
+            styleDefinition.getHeadingColor(), 1, styleDefinition);
         ensureParagraphStyle(styles, "Heading3", "Heading 3", styleDefinition.getHeadingThreeFontSize(),
-            styleDefinition.getHeadingColor(), 2);
+            styleDefinition.getHeadingColor(), 2, styleDefinition);
         ensureParagraphStyle(styles, "Heading4", "Heading 4", styleDefinition.getHeadingFourFontSize(),
-            styleDefinition.getHeadingColor(), 3);
+            styleDefinition.getHeadingColor(), 3, styleDefinition);
         ensureParagraphStyle(styles, "Heading5", "Heading 5", styleDefinition.getHeadingFiveFontSize(),
-            styleDefinition.getHeadingColor(), 4);
+            styleDefinition.getHeadingColor(), 4, styleDefinition);
         ensureParagraphStyle(styles, "Heading6", "Heading 6", styleDefinition.getHeadingSixFontSize(),
-            styleDefinition.getHeadingColor(), 5);
+            styleDefinition.getHeadingColor(), 5, styleDefinition);
     }
 
     private void ensureNormalStyle(XWPFStyles styles, WordRenderStyleDefinition styleDefinition) {
         if (styles.styleExist("Normal")) {
+            updateExistingStyleFont(styles.getStyle("Normal"), styleDefinition.getFontFamily());
             return;
         }
         CTStyle normal = CTStyle.Factory.newInstance();
@@ -163,10 +178,10 @@ public class WordRenderDocumentComposer {
 
         CTRPr runProperties = normal.addNewRPr();
         CTFonts fonts = runProperties.addNewRFonts();
-        fonts.setAscii(fontResolver.getDefaultFontFamily());
-        fonts.setHAnsi(fontResolver.getDefaultFontFamily());
-        fonts.setCs(fontResolver.getDefaultFontFamily());
-        fonts.setEastAsia(fontResolver.getDefaultFontFamily());
+        fonts.setAscii(styleDefinition.getFontFamily());
+        fonts.setHAnsi(styleDefinition.getFontFamily());
+        fonts.setCs(styleDefinition.getFontFamily());
+        fonts.setEastAsia(styleDefinition.getFontFamily());
 
         CTHpsMeasure size = runProperties.addNewSz();
         size.setVal(BigInteger.valueOf(styleDefinition.getBodyFontSize() * 2L));
@@ -177,8 +192,9 @@ public class WordRenderDocumentComposer {
     }
 
     private void ensureParagraphStyle(XWPFStyles styles, String styleId, String name, int fontSize, String color,
-                                      int outlineLevel) {
+                                      int outlineLevel, WordRenderStyleDefinition styleDefinition) {
         if (styles.styleExist(styleId)) {
+            updateExistingStyleFont(styles.getStyle(styleId), styleDefinition.getFontFamily());
             return;
         }
         CTStyle ctStyle = CTStyle.Factory.newInstance();
@@ -207,10 +223,10 @@ public class WordRenderDocumentComposer {
 
         CTRPr runProperties = ctStyle.addNewRPr();
         CTFonts fonts = runProperties.addNewRFonts();
-        fonts.setAscii(fontResolver.getDefaultFontFamily());
-        fonts.setHAnsi(fontResolver.getDefaultFontFamily());
-        fonts.setCs(fontResolver.getDefaultFontFamily());
-        fonts.setEastAsia(fontResolver.getDefaultFontFamily());
+        fonts.setAscii(styleDefinition.getFontFamily());
+        fonts.setHAnsi(styleDefinition.getFontFamily());
+        fonts.setCs(styleDefinition.getFontFamily());
+        fonts.setEastAsia(styleDefinition.getFontFamily());
 
         CTHpsMeasure size = runProperties.addNewSz();
         size.setVal(BigInteger.valueOf(fontSize * 2L));
@@ -223,6 +239,58 @@ public class WordRenderDocumentComposer {
         }
 
         styles.addStyle(new XWPFStyle(ctStyle));
+    }
+
+    private void updateExistingStyleFont(XWPFStyle style, String fontFamily) {
+        if (style == null || !hasText(fontFamily)) {
+            return;
+        }
+        CTStyle ctStyle = style.getCTStyle();
+        CTRPr runProperties = ctStyle.isSetRPr() ? ctStyle.getRPr() : ctStyle.addNewRPr();
+        CTFonts fonts = runProperties.sizeOfRFontsArray() > 0 ? runProperties.getRFontsArray(0) : runProperties.addNewRFonts();
+        fonts.setAscii(fontFamily);
+        fonts.setHAnsi(fontFamily);
+        fonts.setCs(fontFamily);
+        fonts.setEastAsia(fontFamily);
+    }
+
+    private String resolveTemplateFontFamily(XWPFDocument document) {
+        XWPFStyles styles = document.getStyles();
+        if (styles != null) {
+            XWPFStyle normalStyle = styles.getStyle("Normal");
+            String styleFont = extractStyleFontFamily(normalStyle);
+            if (hasText(styleFont)) {
+                return styleFont;
+            }
+        }
+        for (XWPFParagraph paragraph : document.getParagraphs()) {
+            String paragraphFont = WordRenderPoiSupport.resolveParagraphFontFamily(paragraph);
+            if (hasText(paragraphFont)) {
+                return paragraphFont;
+            }
+        }
+        return null;
+    }
+
+    private String extractStyleFontFamily(XWPFStyle style) {
+        if (style == null || style.getCTStyle() == null || !style.getCTStyle().isSetRPr()) {
+            return null;
+        }
+        CTRPr runProperties = style.getCTStyle().getRPr();
+        if (runProperties.sizeOfRFontsArray() == 0) {
+            return null;
+        }
+        CTFonts fonts = runProperties.getRFontsArray(0);
+        if (fonts.isSetEastAsia() && hasText(fonts.getEastAsia())) {
+            return fonts.getEastAsia();
+        }
+        if (fonts.isSetAscii() && hasText(fonts.getAscii())) {
+            return fonts.getAscii();
+        }
+        if (fonts.isSetHAnsi() && hasText(fonts.getHAnsi())) {
+            return fonts.getHAnsi();
+        }
+        return null;
     }
 
     private void addWatermark(XWPFDocument document, WordRenderOptions options) {

@@ -106,4 +106,25 @@ public class WordRenderStyleDefinition {
     public int getBottomMarginTwips() {
         return bottomMarginTwips;
     }
+
+    public WordRenderStyleDefinition withFontFamily(String resolvedFontFamily) {
+        return new WordRenderStyleDefinition(
+            resolvedFontFamily,
+            bodyFontSize,
+            titleColor,
+            headingColor,
+            accentColor,
+            coverTitleFontSize,
+            headingOneFontSize,
+            headingTwoFontSize,
+            headingThreeFontSize,
+            headingFourFontSize,
+            headingFiveFontSize,
+            headingSixFontSize,
+            leftMarginTwips,
+            rightMarginTwips,
+            topMarginTwips,
+            bottomMarginTwips
+        );
+    }
 }

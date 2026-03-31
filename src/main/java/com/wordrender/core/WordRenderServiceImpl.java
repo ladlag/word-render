@@ -62,6 +62,7 @@ public class WordRenderServiceImpl implements WordRenderService {
         validate(content, resolvedOptions);
         WordRenderStyleDefinition styleDefinition = resolveStyle(resolvedOptions);
         try (XWPFDocument document = documentComposer.createDocument(resolvedOptions, styleDefinition)) {
+            styleDefinition = documentComposer.adaptStyleToTemplate(document, resolvedOptions, styleDefinition);
             if (resolvedOptions.getTemplateMode() == WordRenderTemplateMode.PLACEHOLDER) {
                 templatePlaceholderProcessor.replace(document, resolvedOptions.getTemplateBindings(), styleDefinition);
             } else {
