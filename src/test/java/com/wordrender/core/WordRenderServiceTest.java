@@ -26,6 +26,15 @@ import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.BreakType;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.apache.poi.xwpf.usermodel.XWPFStyle;
+import org.apache.poi.xwpf.usermodel.XWPFStyles;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTDecimalNumber;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTFonts;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTHpsMeasure;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRPr;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTString;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTStyle;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STStyleType;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -91,6 +100,8 @@ class WordRenderServiceTest {
             );
             assertThat(Files.exists(tempFile)).isTrue();
             assertThat(Files.size(tempFile)).isGreaterThan(0L);
+            String documentXml = readZipEntry(Files.readAllBytes(tempFile), "word/document.xml");
+            assertThat(documentXml).contains("w:firstLineChars=\"200\"");
         });
     }
 
@@ -554,6 +565,83 @@ class WordRenderServiceTest {
     }
 
     @Test
+    void shouldMapTemplateHeadingStylesWithNumericStyleIds() {
+        contextRunner.run(context -> {
+            WordRenderService service = context.getBean(WordRenderService.class);
+            Path fixtureDir = fixtureDir();
+            Path templatePath = fixtureDir.resolve("placeholder-numeric-heading-style.docx");
+
+            try (XWPFDocument templateDocument = new XWPFDocument();
+                 OutputStream outputStream = Files.newOutputStream(templatePath)) {
+                addNumericHeadingStyle(templateDocument.createStyles(), "2", "heading 1", 0, 22);
+                addNumericHeadingStyle(templateDocument.getStyles(), "3", "heading 2", 1, 18);
+                addNumericHeadingStyle(templateDocument.getStyles(), "4", "heading 3", 2, 16);
+                addNumericHeadingStyle(templateDocument.getStyles(), "5", "heading 4", 3, 14);
+                templateDocument.createParagraph().createRun().setText("模板一级标题");
+                templateDocument.createParagraph().createRun().addBreak(BreakType.PAGE);
+                templateDocument.createParagraph().createRun().setText("${wr_content}");
+                templateDocument.write(outputStream);
+            }
+
+            byte[] bytes = service.renderDocx(
+                "",
+                WordRenderOptions.builder()
+                    .templateResource(templatePath.toUri().toString())
+                    .templateMode(WordRenderTemplateMode.PLACEHOLDER)
+                    .templateBinding("wr_content", WordRenderTemplateBinding.builder()
+                        .content("# 三级标题\n\n## 四级标题")
+                        .contentType(WordRenderContentType.MARKDOWN)
+                        .baseHeadingLevel(3)
+                        .build())
+                    .build()
+            );
+
+            try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(bytes))) {
+                assertThat(document.getParagraphs().stream()
+                    .filter(p -> p.getText().contains("三级标题"))
+                    .findFirst()
+                    .map(XWPFParagraph::getStyle)
+                    .orElse(null)).isEqualTo("4");
+                assertThat(document.getParagraphs().stream()
+                    .filter(p -> p.getText().contains("四级标题"))
+                    .findFirst()
+                    .map(XWPFParagraph::getStyle)
+                    .orElse(null)).isEqualTo("5");
+            }
+        });
+    }
+
+    @Test
+    void shouldApplyTwoCharacterFirstLineIndentToTemplatePlaceholderBodyParagraphs() {
+        contextRunner.run(context -> {
+            WordRenderService service = context.getBean(WordRenderService.class);
+            Path fixtureDir = fixtureDir();
+            Path templatePath = fixtureDir.resolve("placeholder-first-line-indent.docx");
+
+            try (XWPFDocument templateDocument = new XWPFDocument();
+                 OutputStream outputStream = Files.newOutputStream(templatePath)) {
+                templateDocument.createParagraph().createRun().setText("${wr_content}");
+                templateDocument.write(outputStream);
+            }
+
+            byte[] bytes = service.renderDocx(
+                "",
+                WordRenderOptions.builder()
+                    .templateResource(templatePath.toUri().toString())
+                    .templateMode(WordRenderTemplateMode.PLACEHOLDER)
+                    .templateBinding("wr_content", WordRenderTemplateBinding.builder()
+                        .content("这是模板占位正文。\n\n这是第二段正文。")
+                        .contentType(WordRenderContentType.PLAIN_TEXT)
+                        .build())
+                    .build()
+            );
+
+            String documentXml = readZipEntry(bytes, "word/document.xml");
+            assertThat(documentXml).contains("w:firstLineChars=\"200\"");
+        });
+    }
+
+    @Test
     void shouldReplacePlaceholderInsideTableCell() {
         contextRunner.run(context -> {
             WordRenderService service = context.getBean(WordRenderService.class);
@@ -729,6 +817,32 @@ class WordRenderServiceTest {
             templateDocument.write(outputStream);
         }
         return templatePath;
+    }
+
+    private void addNumericHeadingStyle(XWPFStyles styles, String styleId, String name, int outlineLevel, int fontSize) {
+        CTStyle ctStyle = CTStyle.Factory.newInstance();
+        ctStyle.setStyleId(styleId);
+        ctStyle.setType(STStyleType.PARAGRAPH);
+        CTString styleName = ctStyle.addNewName();
+        styleName.setVal(name);
+        ctStyle.addNewBasedOn().setVal("1");
+        ctStyle.addNewNext().setVal("1");
+        ctStyle.addNewQFormat();
+        ctStyle.addNewUiPriority().setVal(java.math.BigInteger.valueOf(9 + outlineLevel));
+        CTDecimalNumber outline = ctStyle.addNewPPr().addNewOutlineLvl();
+        outline.setVal(java.math.BigInteger.valueOf(outlineLevel));
+        CTRPr runProperties = ctStyle.addNewRPr();
+        CTFonts fonts = runProperties.addNewRFonts();
+        fonts.setAscii("仿宋_GB2312");
+        fonts.setHAnsi("仿宋_GB2312");
+        fonts.setEastAsia("仿宋_GB2312");
+        fonts.setCs("仿宋_GB2312");
+        runProperties.addNewB();
+        CTHpsMeasure size = runProperties.addNewSz();
+        size.setVal(java.math.BigInteger.valueOf(fontSize * 2L));
+        CTHpsMeasure sizeCs = runProperties.addNewSzCs();
+        sizeCs.setVal(java.math.BigInteger.valueOf(fontSize * 2L));
+        styles.addStyle(new XWPFStyle(ctStyle));
     }
 
     private Path outputDir() throws Exception {

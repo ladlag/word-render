@@ -106,7 +106,7 @@ public class WordRenderMarkdownRenderer implements WordRenderContentRenderer {
         XWPFParagraph paragraph = context.target.createParagraph(ParagraphAlignment.LEFT, 140);
         int level = Math.min(heading.getLevel() + context.baseHeadingLevel - 1, 6);
         int fontSize = resolveHeadingFontSize(context, level);
-        paragraph.setStyle("Heading" + level);
+        paragraph.setStyle(context.styleDefinition.resolveHeadingStyleId(level));
         appendInlineChildren(paragraph, heading, context.styleDefinition, fontSize, true, false);
     }
 
@@ -133,6 +133,8 @@ public class WordRenderMarkdownRenderer implements WordRenderContentRenderer {
         XWPFParagraph paragraph = context.target.createParagraph(ParagraphAlignment.BOTH, 120);
         if (numId != null) {
             paragraph.setNumID(numId);
+        } else {
+            WordRenderPoiSupport.applyFirstLineIndentChars(paragraph, 2);
         }
         appendInlineChildren(paragraph, paragraphNode, context.styleDefinition,
             context.styleDefinition.getBodyFontSize(), false, false);

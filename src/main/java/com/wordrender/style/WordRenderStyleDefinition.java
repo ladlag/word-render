@@ -1,5 +1,9 @@
 package com.wordrender.style;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 public class WordRenderStyleDefinition {
 
     private final String fontFamily;
@@ -18,6 +22,7 @@ public class WordRenderStyleDefinition {
     private final int rightMarginTwips;
     private final int topMarginTwips;
     private final int bottomMarginTwips;
+    private final Map<Integer, String> headingStyleIds;
 
     public WordRenderStyleDefinition(String fontFamily, int bodyFontSize, String titleColor, String headingColor,
                                      String accentColor,
@@ -25,6 +30,18 @@ public class WordRenderStyleDefinition {
                                      int headingThreeFontSize, int headingFourFontSize, int headingFiveFontSize,
                                      int headingSixFontSize, int leftMarginTwips,
                                      int rightMarginTwips, int topMarginTwips, int bottomMarginTwips) {
+        this(fontFamily, bodyFontSize, titleColor, headingColor, accentColor, coverTitleFontSize, headingOneFontSize,
+            headingTwoFontSize, headingThreeFontSize, headingFourFontSize, headingFiveFontSize, headingSixFontSize,
+            leftMarginTwips, rightMarginTwips, topMarginTwips, bottomMarginTwips, null);
+    }
+
+    public WordRenderStyleDefinition(String fontFamily, int bodyFontSize, String titleColor, String headingColor,
+                                     String accentColor,
+                                     int coverTitleFontSize, int headingOneFontSize, int headingTwoFontSize,
+                                     int headingThreeFontSize, int headingFourFontSize, int headingFiveFontSize,
+                                     int headingSixFontSize, int leftMarginTwips,
+                                     int rightMarginTwips, int topMarginTwips, int bottomMarginTwips,
+                                     Map<Integer, String> headingStyleIds) {
         this.fontFamily = fontFamily;
         this.bodyFontSize = bodyFontSize;
         this.titleColor = titleColor;
@@ -41,6 +58,9 @@ public class WordRenderStyleDefinition {
         this.rightMarginTwips = rightMarginTwips;
         this.topMarginTwips = topMarginTwips;
         this.bottomMarginTwips = bottomMarginTwips;
+        this.headingStyleIds = headingStyleIds == null
+            ? Collections.<Integer, String>emptyMap()
+            : Collections.unmodifiableMap(new HashMap<Integer, String>(headingStyleIds));
     }
 
     public String getFontFamily() {
@@ -107,6 +127,15 @@ public class WordRenderStyleDefinition {
         return bottomMarginTwips;
     }
 
+    public String resolveHeadingStyleId(int level) {
+        String mapped = headingStyleIds.get(Integer.valueOf(level));
+        return mapped != null ? mapped : "Heading" + level;
+    }
+
+    public Map<Integer, String> getHeadingStyleIds() {
+        return headingStyleIds;
+    }
+
     public WordRenderStyleDefinition withFontFamily(String resolvedFontFamily) {
         return new WordRenderStyleDefinition(
             resolvedFontFamily,
@@ -124,7 +153,30 @@ public class WordRenderStyleDefinition {
             leftMarginTwips,
             rightMarginTwips,
             topMarginTwips,
-            bottomMarginTwips
+            bottomMarginTwips,
+            headingStyleIds
+        );
+    }
+
+    public WordRenderStyleDefinition withHeadingStyleIds(Map<Integer, String> resolvedHeadingStyleIds) {
+        return new WordRenderStyleDefinition(
+            fontFamily,
+            bodyFontSize,
+            titleColor,
+            headingColor,
+            accentColor,
+            coverTitleFontSize,
+            headingOneFontSize,
+            headingTwoFontSize,
+            headingThreeFontSize,
+            headingFourFontSize,
+            headingFiveFontSize,
+            headingSixFontSize,
+            leftMarginTwips,
+            rightMarginTwips,
+            topMarginTwips,
+            bottomMarginTwips,
+            resolvedHeadingStyleIds
         );
     }
 }

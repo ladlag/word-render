@@ -14,9 +14,12 @@ import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
+import org.apache.poi.openxml4j.opc.PackagePart;
 import org.apache.poi.ooxml.POIXMLProperties;
 import org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy;
 import org.apache.poi.xwpf.usermodel.BreakType;
@@ -33,6 +36,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPageSz;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSimpleField;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTStyle;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTStyles;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTString;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTDecimalNumber;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTFonts;
@@ -90,11 +94,15 @@ public class WordRenderDocumentComposer {
         if (!hasTemplate(options)) {
             return styleDefinition;
         }
+        Map<Integer, String> headingStyleIds = resolveTemplateHeadingStyleIds(document);
         String templateFontFamily = resolveTemplateFontFamily(document);
-        if (!hasText(templateFontFamily)) {
-            return styleDefinition;
+        WordRenderStyleDefinition adapted = styleDefinition;
+        if (hasText(templateFontFamily)) {
+            adapted = adapted.withFontFamily(templateFontFamily);
         }
-        WordRenderStyleDefinition adapted = styleDefinition.withFontFamily(templateFontFamily);
+        if (!headingStyleIds.isEmpty()) {
+            adapted = adapted.withHeadingStyleIds(headingStyleIds);
+        }
         configureStyles(document, adapted);
         return adapted;
     }
@@ -270,6 +278,127 @@ public class WordRenderDocumentComposer {
             }
         }
         return null;
+    }
+
+    private Map<Integer, String> resolveTemplateHeadingStyleIds(XWPFDocument document) {
+        XWPFStyles styles = document.getStyles();
+        if (styles == null) {
+            return Collections.emptyMap();
+        }
+        Map<Integer, HeadingStyleCandidate> candidates = new HashMap<Integer, HeadingStyleCandidate>();
+        CTStyles ctStyles = readTemplateStyles(document);
+        if (ctStyles != null) {
+            for (CTStyle ctStyle : ctStyles.getStyleArray()) {
+                registerHeadingStyleCandidate(candidates, new XWPFStyle(ctStyle));
+            }
+        }
+        for (int level = 1; level <= 6; level++) {
+            registerHeadingStyleCandidate(candidates, styles.getStyleWithName("heading " + level));
+            XWPFStyle fallback = styles.getStyle("Heading" + level);
+            registerHeadingStyleCandidate(candidates, fallback);
+        }
+        Map<Integer, String> resolved = new HashMap<Integer, String>();
+        for (Map.Entry<Integer, HeadingStyleCandidate> entry : candidates.entrySet()) {
+            if (entry.getValue() != null && hasText(entry.getValue().styleId)) {
+                resolved.put(entry.getKey(), entry.getValue().styleId);
+            }
+        }
+        return resolved;
+    }
+
+    private CTStyles readTemplateStyles(XWPFDocument document) {
+        try {
+            for (PackagePart part : document.getPackage().getPartsByName(Pattern.compile("/word/styles.xml"))) {
+                try (InputStream inputStream = part.getInputStream()) {
+                    return CTStyles.Factory.parse(inputStream);
+                }
+            }
+        } catch (Exception ex) {
+            return null;
+        }
+        return null;
+    }
+
+    private void registerHeadingStyleCandidate(Map<Integer, HeadingStyleCandidate> candidates, XWPFStyle style) {
+        if (style == null || style.getCTStyle() == null || style.getCTStyle().getStyleId() == null) {
+            return;
+        }
+        int level = resolveHeadingLevel(style);
+        if (level < 1 || level > 6) {
+            return;
+        }
+        HeadingStyleCandidate candidate = new HeadingStyleCandidate(style.getCTStyle().getStyleId(),
+            computeHeadingCandidateScore(style, level));
+        HeadingStyleCandidate current = candidates.get(Integer.valueOf(level));
+        if (current == null || candidate.score > current.score) {
+            candidates.put(Integer.valueOf(level), candidate);
+        }
+    }
+
+    private int resolveHeadingLevel(XWPFStyle style) {
+        String name = null;
+        if (style.getCTStyle().isSetName() && style.getCTStyle().getName().getVal() != null) {
+            name = style.getCTStyle().getName().getVal();
+        }
+        int nameLevel = parseHeadingLevel(name);
+        if (nameLevel > 0) {
+            return nameLevel;
+        }
+        if (style.getCTStyle().isSetPPr() && style.getCTStyle().getPPr().isSetOutlineLvl()) {
+            return style.getCTStyle().getPPr().getOutlineLvl().getVal().intValue() + 1;
+        }
+        return -1;
+    }
+
+    private int computeHeadingCandidateScore(XWPFStyle style, int level) {
+        int score = 0;
+        String styleId = style.getCTStyle().getStyleId();
+        String normalizedId = styleId == null ? "" : styleId.trim();
+        String normalizedName = "";
+        if (style.getCTStyle().isSetName() && style.getCTStyle().getName().getVal() != null) {
+            normalizedName = style.getCTStyle().getName().getVal().trim().toLowerCase();
+        }
+        if (normalizedName.equals("heading " + level) || normalizedName.equals("heading" + level)) {
+            score += 100;
+        }
+        if (style.getCTStyle().isSetPPr() && style.getCTStyle().getPPr().isSetOutlineLvl()
+            && style.getCTStyle().getPPr().getOutlineLvl().getVal().intValue() == level - 1) {
+            score += 50;
+        }
+        if (!normalizedId.equals("Heading" + level)) {
+            score += 10;
+        }
+        return score;
+    }
+
+    private int parseHeadingLevel(String styleName) {
+        if (!hasText(styleName)) {
+            return -1;
+        }
+        String normalized = styleName.trim().toLowerCase();
+        if (!normalized.startsWith("heading")) {
+            return -1;
+        }
+        String suffix = normalized.substring("heading".length()).trim();
+        if (suffix.isEmpty()) {
+            return -1;
+        }
+        try {
+            int level = Integer.parseInt(suffix);
+            return level >= 1 && level <= 6 ? level : -1;
+        } catch (NumberFormatException ex) {
+            return -1;
+        }
+    }
+
+    private static class HeadingStyleCandidate {
+        private final String styleId;
+        private final int score;
+
+        private HeadingStyleCandidate(String styleId, int score) {
+            this.styleId = styleId;
+            this.score = score;
+        }
     }
 
     private String extractStyleFontFamily(XWPFStyle style) {

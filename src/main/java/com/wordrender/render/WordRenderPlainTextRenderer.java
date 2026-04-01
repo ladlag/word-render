@@ -13,6 +13,7 @@ public class WordRenderPlainTextRenderer implements WordRenderContentRenderer {
         String[] blocks = content.split("\\r?\\n\\s*\\r?\\n");
         for (String block : blocks) {
             XWPFParagraph paragraph = target.createParagraph(ParagraphAlignment.BOTH, 120);
+            WordRenderPoiSupport.applyFirstLineIndentChars(paragraph, 2);
             String[] lines = block.split("\\r?\\n");
             for (int i = 0; i < lines.length; i++) {
                 WordRenderPoiSupport.appendText(paragraph, lines[i], styleDefinition.getFontFamily(),

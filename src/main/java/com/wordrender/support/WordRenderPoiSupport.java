@@ -21,6 +21,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTR;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRPr;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTFonts;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTShd;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTInd;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGrid;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblGridCol;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblLayoutType;
@@ -123,6 +124,17 @@ public final class WordRenderPoiSupport {
             }
             target.removeRun(0);
         }
+    }
+
+    public static void applyFirstLineIndentChars(XWPFParagraph paragraph, int chars) {
+        if (paragraph == null || chars <= 0) {
+            return;
+        }
+        CTPPr paragraphProperties = paragraph.getCTP().isSetPPr()
+            ? paragraph.getCTP().getPPr()
+            : paragraph.getCTP().addNewPPr();
+        CTInd indentation = paragraphProperties.isSetInd() ? paragraphProperties.getInd() : paragraphProperties.addNewInd();
+        indentation.setFirstLineChars(BigInteger.valueOf(chars * 100L));
     }
 
     public static String resolveParagraphFontFamily(XWPFParagraph paragraph) {
